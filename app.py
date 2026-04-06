@@ -1,148 +1,196 @@
 from dotenv import load_dotenv
 import os
-from groq import Groq
 import streamlit as st
+from groq import Groq
 from streamlit_option_menu import option_menu
+
+# LangChain imports (fixed)
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import CharacterTextSplitter
 
 # Load env
 load_dotenv()
-
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# Page config
-st.set_page_config(page_title="AI Content Pro", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="AI Content Pro+", layout="wide")
 
-# ---------------- LOGIN SYSTEM ----------------
+# ---------------- SESSION ----------------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
+# ---------------- LOGIN ----------------
 def login():
-    st.title("🔐 Login to AI Content Pro")
-    
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        st.title("🔐 Login")
+        user = st.text_input("Username")
+        pwd = st.text_input("Password", type="password")
 
-    if st.button("Login"):
-        if username == "admin" and password == "vip123":
-            st.session_state.logged_in = True
-            st.success("Login successful!")
-            st.rerun()
-        else:
-            st.error("Invalid credentials")
+        if st.button("Login"):
+            if user == "admin" and pwd == "vip123":
+                st.session_state.logged_in = True
+                st.rerun()
+            else:
+                st.error("Invalid credentials")
 
 if not st.session_state.logged_in:
     login()
     st.stop()
 
 # ---------------- SIDEBAR ----------------
+from streamlit_option_menu import option_menu
+
 with st.sidebar:
-    selected = option_menu(
-        "AI Content Pro",
-        ["Dashboard", "Instagram", "YouTube", "Hooks", "Ideas"],
-        icons=["house", "instagram", "youtube", "lightning", "bulb"],
-        menu_icon="cast",
+    page = option_menu(
+        menu_title="AI Content Pro",
+        options=["Dashboard", "Instagram", "YouTube", "Ideas","Logout"],
+        icons=["house", "instagram", "youtube", "lightbulb","box-arrow-right"],
+        menu_icon="rocket",
         default_index=0,
+        styles={
+            "container": {"padding": "5px", "background-color": "#0f172a"},
+            "icon": {"color": "#38bdf8", "font-size": "20px"},
+            "nav-link": {
+                "font-size": "16px",
+                "text-align": "left",
+                "margin": "5px",
+                "border-radius": "10px",
+            },
+            "nav-link-selected": {
+                "background-color": "#2563eb",
+                "color": "white",
+                "font-weight": "bold",
+            },
+        }
+        
     )
+    if st.button("Logout"):
+        st.session_state.logged_in = False
+        st.rerun()
+# ---------------- RAG HELPER ----------------
+def process_file(uploaded_file):
+    if uploaded_file:
+        with open("temp.pdf", "wb") as f:
+            f.write(uploaded_file.read())
+
+        loader = PyPDFLoader("temp.pdf")
+        docs = loader.load()
+
+        splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+        chunks = splitter.split_documents(docs)
+
+        embeddings = HuggingFaceEmbeddings()
+        db = FAISS.from_documents(chunks, embeddings)
+
+        return db
+    return None
+
+def get_context(db, query):
+    if db:
+        results = db.similarity_search(query, k=2)
+        return "\n".join([r.page_content for r in results])
+    return ""
 
 # ---------------- DASHBOARD ----------------
-if selected == "Dashboard":
-    st.title("🚀 AI Content Dashboard")
-    
-    st.markdown("### Grow Faster with AI")
-    
+if page == "Dashboard":
+    st.title("📊 Main Dashboard")
+
     col1, col2, col3 = st.columns(3)
-    
-    col1.metric("Content Generated", "120+")
-    col2.metric("Active Users", "12")
-    col3.metric("Growth Rate", "🔥 High")
+
+    with col1:
+        st.metric("Instagram Posts", "24", "+5 today")
+
+    with col2:
+        st.metric("YouTube Videos", "10", "+2 today")
+
+    with col3:
+        st.metric("Ideas Generated", "56", "+12 today")
+
+    st.markdown("---")
+
+    st.subheader("📌 Recent Activity")
+    st.write("✔ Generated Instagram caption")
+    st.write("✔ Uploaded YouTube script")
+    st.write("✔ Created new content idea")
 
 # ---------------- INSTAGRAM ----------------
-elif selected == "Instagram":
-    st.title("📸 Instagram Caption Generator")
-    
-    topic = st.text_input("Enter your topic")
+elif page == "Instagram":
+    st.title("📸 Instagram Content Generator")
 
-    if st.button("Generate Caption"):
-        prompt = f"""
-        Create a viral Instagram caption for: {topic}
-        
-        Include:
-        - Hook
-        - Value
-        - CTA
-        - Hashtags
-        """
-
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": "You are a viral Instagram content expert."},
-                {"role": "user", "content": prompt}
-            ]
-        )
-
-        st.success(response.choices[0].message.content)
-
-# ---------------- YOUTUBE ----------------
-elif selected == "YouTube":
-    st.title("🎬 YouTube Script Generator")
-    
-    topic = st.text_input("Enter video topic")
-
-    if st.button("Generate Script"):
-        prompt = f"""
-        Write a YouTube script for: {topic}
-        
-        Include:
-        - Hook
-        - Main content
-        - CTA
-        """
-
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": "You are a YouTube growth expert."},
-                {"role": "user", "content": prompt}
-            ]
-        )
-
-        st.success(response.choices[0].message.content)
-
-# ---------------- HOOKS ----------------
-elif selected == "Hooks":
-    st.title("⚡ Viral Hooks Generator")
-    
     topic = st.text_input("Enter topic")
 
-    if st.button("Generate Hooks"):
-        prompt = f"Generate 10 viral hooks for: {topic}"
+    uploaded_file = st.file_uploader("Upload context (optional PDF)", type="pdf")
 
-        response = client.chat.completions.create(
+    if st.button("Generate Content"):
+        db = process_file(uploaded_file)
+        context = get_context(db, topic)
+
+        # Agent workflow
+        hooks = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": "You are a viral marketing expert."},
-                {"role": "user", "content": prompt}
-            ]
+            messages=[{"role": "user", "content": f"{context}\n5 viral hooks for {topic}"}]
+        ).choices[0].message.content
+
+        caption = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": f"{context}\nInstagram caption for {topic}"}]
+        ).choices[0].message.content
+
+        hashtags = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": f"{context}\nHashtags for {topic}"}]
+        ).choices[0].message.content
+
+        st.subheader("🔥 Hooks")
+        st.write(hooks)
+
+        st.subheader("📄 Caption")
+        st.write(caption)
+
+        st.subheader("🏷️ Hashtags")
+        st.write(hashtags)
+
+# ---------------- YOUTUBE ----------------
+elif page == "YouTube":
+    st.title("🎬 YouTube Generator")
+
+    topic = st.text_input("Enter topic")
+
+    uploaded_file = st.file_uploader("Upload context (optional PDF)", type="pdf")
+
+    if st.button("Generate"):
+        db = process_file(uploaded_file)
+        context = get_context(db, topic)
+
+        output = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": f"{context}\nWrite YouTube script for {topic}"}]
         )
 
-        st.success(response.choices[0].message.content)
+        st.write(output.choices[0].message.content)
 
 # ---------------- IDEAS ----------------
-elif selected == "Ideas":
+elif page == "Ideas":
     st.title("💡 Content Ideas Generator")
-    
-    topic = st.text_input("Enter niche/topic")
+
+    topic = st.text_input("Enter topic")
+
+    uploaded_file = st.file_uploader("Upload context (optional PDF)", type="pdf")
 
     if st.button("Generate Ideas"):
-        prompt = f"Generate 10 high-engagement content ideas for: {topic}"
+        db = process_file(uploaded_file)
+        context = get_context(db, topic)
 
-        response = client.chat.completions.create(
+        output = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": "You are a content strategist."},
-                {"role": "user", "content": prompt}
-            ]
+            messages=[{"role": "user", "content": f"{context}\nGenerate 10 content ideas for {topic}"}]
         )
 
-        st.success(response.choices[0].message.content)
+        st.write(output.choices[0].message.content)
+
+# ---------------- Logout ----------------
+elif page == "Logout":
+    st.session_state.logged_in = False
+    st.rerun()
